@@ -41,6 +41,11 @@ options:
         required: false
         default: "present"
         choices: ["present", "absent", "latest"]
+
+    stdin:
+        description:
+            - Input to feed to pear on stdin. Only used for package installation/upgrade.
+        required: false
 '''
 
 EXAMPLES = '''
@@ -49,6 +54,9 @@ EXAMPLES = '''
 
 # Install pecl package
 - pear: name=pecl/json_post state=present
+
+# Install pecl package answering to questions on stdin
+- pear: name=pecl/stomp state=present stdin=no
 
 # Upgrade package
 - pear: name=Net_URL2 state=latest
@@ -130,7 +138,7 @@ def remove_packages(module, packages):
     module.exit_json(changed=False, msg="package(s) already absent")
 
 
-def install_packages(module, state, packages):
+def install_packages(module, state, packages, stdin):
     install_c = 0
 
     for i, package in enumerate(packages):
@@ -147,7 +155,7 @@ def install_packages(module, state, packages):
             command = 'upgrade'
 
         cmd = "pear %s %s" % (command, package)
-        rc, stdout, stderr = module.run_command(cmd, check_rc=False)
+        rc, stdout, stderr = module.run_command(cmd, check_rc=False, data=stdin)
 
         if rc != 0:
             module.fail_json(msg="failed to install %s" % (package))
@@ -191,7 +199,8 @@ def main():
     module = AnsibleModule(
         argument_spec    = dict(
             name         = dict(aliases=['pkg']),
-            state        = dict(default='present', choices=['present', 'installed', "latest", 'absent', 'removed'])),
+            state        = dict(default='present', choices=['present', 'installed', "latest", 'absent', 'removed']),
+            stdin        = dict()),
         required_one_of = [['name']],
         supports_check_mode = True)
 
@@ -205,6 +214,10 @@ def main():
         p['state'] = 'present'
     elif p['state'] in ['absent', 'removed']:
         p['state'] = 'absent'
+        
+    stdin = None
+    if p['stdin']:
+        stdin = p['stdin']
 
     if p['name']:
         pkgs = p['name'].split(',')
@@ -217,7 +230,7 @@ def main():
             check_packages(module, pkgs, p['state'])
 
         if p['state'] in ['present', 'latest']:
-            install_packages(module, p['state'], pkgs)
+            install_packages(module, p['state'], pkgs, stdin)
         elif p['state'] == 'absent':
             remove_packages(module, pkgs)
 
