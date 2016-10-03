@@ -149,8 +149,11 @@ def install_packages(module, state, packages):
         cmd = "pear %s %s" % (command, package)
         rc, stdout, stderr = module.run_command(cmd, check_rc=False)
 
-        if rc != 0:
-            module.fail_json(msg="failed to install %s" % (package))
+        # verify that the package is actually installed
+        # as pear exit value is unreliable
+        installed, updated = query_package(module, package)
+        if rc != 0 or not installed or (state == 'latest' and not updated):
+            module.fail_json(msg="failed to install %s: %s" % (package, stdout))
 
         install_c += 1
 
